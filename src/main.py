@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Query
 from pydantic import BaseModel
 from src.repos.fake_payment_repo import FakePaymentRepository
 from src.services.payment_service import PaymentService
@@ -118,9 +118,9 @@ def create_refund(refund_data: RefundCreate):
 # ... existing routes ...
 
 @app.get("/payments", status_code=status.HTTP_200_OK)
-def get_all_payments():
+def get_all_payments(payment_status: Optional[str] = Query(None, alias="status")):
     try:
-        return service.get_all_payments()
+        return service.get_all_payments(status=payment_status)
     except Exception:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
     

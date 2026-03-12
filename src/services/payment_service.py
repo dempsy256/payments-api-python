@@ -71,8 +71,11 @@ class PaymentService:
         }
         return self.repo.save_refund(refund)
     
-    def get_all_payments(self):
-        return self.repo.get_all_payments()
+    def get_all_payments(self, status=None):
+        payments = self.repo.get_all_payments()
+        if status:
+            payments = [p for p in payments if p.get("status") == status]
+        return payments
     
     def get_customer(self, customer_id: str):
         customer = self.repo.find_customer_by_id(customer_id)

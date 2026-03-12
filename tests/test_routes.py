@@ -275,7 +275,84 @@ def test_customer_same_email_twice_returns_409():
     res2 = client.post("/customers", json={"name": "Hannah Clone", "email": "hannah@example.com"})
     assert res2.status_code == 409
 
+def test_customer_email_missing_domain():
+    res = client.post("/customers", json={"name": "Test", "email": "test@.com"})
+    assert res.status_code == 400
+
+def test_customer_email_missing_tld():
+    res = client.post("/customers", json={"name": "Test", "email": "test@domain"})
+    assert res.status_code == 400
+
+def test_customer_email_multiple_at_symbols():
+    res = client.post("/customers", json={"name": "Test", "email": "test@@example.com"})
+    assert res.status_code == 400
+
+def test_payment_missing_customer_id():
+    res = client.post("/payments", json={"amount": 1000, "currency": "usd"})
+    assert res.status_code == 400
+
+def test_payment_missing_amount():
+    res = client.post("/payments", json={"customer_id": "cus_123", "currency": "usd"})
+    assert res.status_code == 400
+
+def test_refund_missing_payment_id():
+    res = client.post("/refunds", json={"amount": 500})
+    assert res.status_code == 400
+
+def test_refund_missing_amount():
+    res = client.post("/refunds", json={"paymentId": "pay_123"})
+    assert res.status_code == 400
+
+def test_payment_amount_is_string():
+    res = client.post("/payments", json={"customer_id": "cus_123", "amount": "one thousand", "currency": "usd"})
+    assert res.status_code == 400
+
+def test_refund_amount_is_string():
+    res = client.post("/refunds", json={"paymentId": "pay_123", "amount": "five hundred"})
+    assert res.status_code == 400
+
+def test_customer_name_is_number():
+    # Name should be a string, not an integer
+    res = client.post("/customers", json={"name": 12345, "email": "number@example.com"})
+    assert res.status_code == 400
+
+def test_payment_currency_too_long():
+    res = client.post("/payments", json={"customer_id": "cus_123", "amount": 1000, "currency": "usdollars"})
+    assert res.status_code == 400
+
+def test_payment_currency_numbers():
+    res = client.post("/payments", json={"customer_id": "cus_123", "amount": 1000, "currency": "123"})
+    assert res.status_code == 400
+
 # --- UNEXPECTED FAILURE (500) SECURITY TESTS ---
+
+@patch("src.main.service.get_customer")
+def test_get_customer_success(mock_get_customer):
+    mock_get_customer.return_value = {"id": "cus_123", "name": "Alice", "email": "alice@example.com"}
+    res = client.get("/customers/cus_123")
+    assert res.status_code == 200
+    assert res.json()["name"] == "Alice"
+
+@patch("src.main.service.get_customer_payments")
+def test_get_customer_payments_success(mock_get_customer_payments):
+    mock_get_customer_payments.return_value = [{"id": "pay_123", "amount": 1000}]
+    res = client.get("/customers/cus_123/payments")
+    assert res.status_code == 200
+    assert len(res.json()) == 1
+
+@patch("src.main.service.get_payment")
+def test_get_payment_success(mock_get_payment):
+    mock_get_payment.return_value = {"id": "pay_123", "amount": 1000, "status": "pending"}
+    res = client.get("/payments/pay_123")
+    assert res.status_code == 200
+    assert res.json()["id"] == "pay_123"
+
+@patch("src.main.service.get_refund")
+def test_get_refund_success(mock_get_refund):
+    mock_get_refund.return_value = {"id": "ref_123", "amount": 500}
+    res = client.get("/refunds/ref_123")
+    assert res.status_code == 200
+    assert res.json()["id"] == "ref_123"
 
 @patch("src.main.service.create_payment")
 def test_create_payment_service_throws_500(mock_create_payment):
@@ -297,3 +374,34 @@ def test_create_refund_success(mock_create_refund):
     assert res.status_code == 201
     assert res.json()["id"] == "ref_123"
     mock_create_refund.assert_called_once_with("pay_123", 500)
+
+@patch("src.main.service.capture_payment")
+def test_capture_payment_already_captured_or_failed(mock_capture):
+    # Simulate the service rejecting the action
+    mock_capture.side_effect = ValueError("Payment cannot be captured")
+    res = client.post("/payments/pay_123/capture")
+    
+    # Usually returning 409 Conflict or 422 for business logic errors
+    assert res.status_code in [409, 422] 
+    assert res.json()["error"] == "Payment cannot be captured"
+
+@patch("src.main.service.fail_payment")
+def test_fail_payment_already_failed_or_captured(mock_fail):
+    mock_fail.side_effect = ValueError("Payment cannot be failed")
+    res = client.post("/payments/pay_123/fail")
+    
+    assert res.status_code in [409, 422]
+    assert res.json()["error"] == "Payment cannot be failed"
+
+@patch("src.main.service.get_all_payments")
+def test_get_all_payments_with_optional_filter(mock_get_all):
+    mock_get_all.return_value = [{"id": "pay_123", "status": "pending"}]
+    
+    # Hitting the route with a query parameter like ?status=pending
+    res = client.get("/payments?status=pending")
+    
+    assert res.status_code == 200
+    
+    # Assert the router passed the filter down to the service properly
+    # (Depending on how you implemented the filter in main.py, adjust this assertion!)
+    mock_get_all.assert_called_once_with(status="pending")
