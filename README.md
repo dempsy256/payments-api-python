@@ -7,6 +7,26 @@ This project is a RESTful API built with Python and FastAPI that simulates a pay
 
 The entire application was built using strict **Test-Driven Development (TDD)**, ensuring that every feature, edge case, and security requirement was driven by a failing test before implementation.
 
+## Project Structure
+
+The codebase follows a strict layered architecture to separate routing, business logic, and data storage:
+
+```text
+payments-api-python/
+├── src/
+│   ├── main.py                     # FastAPI application, route controllers, and global exception handlers.
+│   ├── services/
+│   │   └── payment_service.py      # Core business logic, validation, state machine rules, and status constants.
+│   └── repos/
+│       └── fake_payment_repo.py    # In-memory data store simulating database queries and persistence.
+├── tests/
+│   ├── test_routes.py              # API endpoint unit tests with mocked services, checking HTTP responses and edge cases.
+│   ├── test_services.py            # (If applicable) Business logic and validation tests.
+│   └── test_repos.py               # (If applicable) Data storage and retrieval tests.
+├── venv/                           # Python virtual environment (ignored in version control).
+└── README.md                       # Project documentation.
+
+
 ## Setup Instructions
 
 To run this project locally, you will need Python installed on your machine.
