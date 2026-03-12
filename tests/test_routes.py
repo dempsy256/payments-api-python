@@ -236,3 +236,49 @@ def test_get_refund_not_found():
     res = client.get("/refunds/ref_unknown999")
     assert res.status_code == 404
     assert res.json() == {"error": "Refund not found"}
+
+# --- INPUT VARIATION TESTS ---
+
+def test_payment_no_body_at_all():
+    # Sending a POST request with absolutely no JSON body
+    res = client.post("/payments")
+    assert res.status_code == 400
+
+def test_payment_amount_null():
+    res = client.post("/payments", json={"customer_id": "cus_123", "amount": None, "currency": "usd"})
+    assert res.status_code == 400
+
+def test_payment_currency_empty_string():
+    res = client.post("/payments", json={"customer_id": "cus_123", "amount": 1000, "currency": ""})
+    assert res.status_code == 400
+
+def test_customer_email_no_at_symbol():
+    res = client.post("/customers", json={"name": "George", "email": "georgeexample.com"})
+    assert res.status_code == 400
+
+def test_customer_same_email_twice_returns_409():
+    client.post("/customers", json={"name": "Hannah", "email": "hannah@example.com"})
+    res2 = client.post("/customers", json={"name": "Hannah Clone", "email": "hannah@example.com"})
+    assert res2.status_code == 409
+
+# --- UNEXPECTED FAILURE (500) SECURITY TESTS ---
+
+@patch("src.main.service.create_payment")
+def test_create_payment_service_throws_500(mock_create_payment):
+    # Simulate a database crash right in the middle of creating a payment
+    mock_create_payment.side_effect = Exception("FATAL: Database connection lost!")
+    
+    res = client.post("/payments", json={"customer_id": "cus_123", "amount": 1000, "currency": "usd"})
+    
+    assert res.status_code == 500
+    # Security check: Make sure the exact error string IS NOT leaked!
+    assert res.json() == {"error": "Something went wrong"}
+
+@patch("src.main.service.create_refund")
+def test_create_refund_service_throws_500(mock_create_refund):
+    mock_create_refund.side_effect = Exception("Memory Overflow Exception in line 402")
+    
+    res = client.post("/refunds", json={"paymentId": "pay_123", "amount": 500})
+    
+    assert res.status_code == 500
+    assert res.json() == {"error": "Something went wrong"}
