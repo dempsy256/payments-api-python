@@ -37,7 +37,7 @@ class PaymentService:
             "customer_id": customer_id,
             "amount": amount,
             "currency": currency,
-            "status": self.STATUS_PENDING
+            "status": PaymentStatus.PENDING  # <-- NO MORE RAW STRING!
         }
         return self.repo.save_payment(payment)
     
@@ -50,7 +50,7 @@ class PaymentService:
             raise ValueError("Payment cannot be captured")
             
         # Update status and save it back to our fake database
-        payment["status"] = self.STATUS_SUCCEEDED
+        payment["status"] = PaymentStatus.SUCCEEDED
         self.repo.save_payment(payment)
         
         return payment
@@ -97,10 +97,12 @@ class PaymentService:
         if not payment:
             raise ValueError("Payment not found")
         
-        if payment["status"] != self.STATUS_PENDING:
+        # Check against the constant
+        if payment["status"] != PaymentStatus.PENDING:
             raise ValueError("Payment cannot be failed")
             
-        payment["status"] = self.STATUS_FAILED
+        # Update using the constant
+        payment["status"] = PaymentStatus.FAILED
         self.repo.save_payment(payment)
         return payment
 
@@ -109,3 +111,8 @@ class PaymentService:
         if not refund:
             raise ValueError("Refund not found")
         return refund
+    
+class PaymentStatus:
+    PENDING = "pending"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"

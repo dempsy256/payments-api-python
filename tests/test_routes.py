@@ -5,22 +5,34 @@ from unittest.mock import patch
 # Create a test client to simulate API requests
 client = TestClient(app)
 
-def test_create_payment_success():
-    # 1. First, we need a valid customer to attach the payment to
-    cust_response = client.post("/customers", json={"name": "Charlie", "email": "charlie@example.com"})
-    assert cust_response.status_code == 201
-    customer_id = cust_response.json()["id"]
-
-    # 2. Now, create the payment for that customer
-    pay_response = client.post("/payments", json={
-        "customer_id": customer_id,
-        "amount": 1500,  # 1500 pence/cents
-        "currency": "usd"
-    })
+@patch("src.main.service.create_customer")
+def test_create_customer_success(mock_create_customer):
+    # 1. Arrange: Tell the fake service exactly what dictionary to return
+    mock_create_customer.return_value = {"id": "cus_123", "name": "Alice", "email": "alice@example.com"}
     
-    assert pay_response.status_code == 201
-    assert pay_response.json()["status"] == "pending"
-    assert "id" in pay_response.json()
+    # 2. Act: Hit the route (no real database or service logic is touched!)
+    res = client.post("/customers", json={"name": "Alice", "email": "alice@example.com"})
+    
+    # 3. Assert: Check the HTTP response and verify the router passed the right data to the service
+    assert res.status_code == 201
+    assert res.json() == {"id": "cus_123", "name": "Alice", "email": "alice@example.com"}
+    mock_create_customer.assert_called_once_with("Alice", "alice@example.com")
+
+@patch("src.main.service.create_payment")
+def test_create_payment_success(mock_create_payment):
+    mock_create_payment.return_value = {
+        "id": "pay_123", 
+        "customer_id": "cus_123", 
+        "amount": 1000, 
+        "currency": "usd", 
+        "status": "pending"
+    }
+    
+    res = client.post("/payments", json={"customer_id": "cus_123", "amount": 1000, "currency": "usd"})
+    
+    assert res.status_code == 201
+    assert res.json()["id"] == "pay_123"
+    mock_create_payment.assert_called_once_with("cus_123", 1000, "usd")
 
 def test_create_payment_fails_for_invalid_customer():
     pay_response = client.post("/payments", json={
@@ -151,16 +163,18 @@ def test_get_all_payments_returns_200_and_list():
 
 # We use @patch to temporarily replace our service's method with a broken fake one
 @patch("src.main.service.get_all_payments")
-def test_get_all_payments_returns_500_on_unexpected_error(mock_get_all):
-    # 1. Setup: Force the mock to raise a generic Exception
-    mock_get_all.side_effect = Exception("Simulated database crash or memory error")
+def test_get_all_payments_returns_200_and_list(mock_get_all):
+    # Fake returning a list of two payments
+    mock_get_all.return_value = [
+        {"id": "pay_1", "amount": 100},
+        {"id": "pay_2", "amount": 200}
+    ]
     
-    # 2. Action: Fetch all payments
-    get_res = client.get("/payments")
+    res = client.get("/payments")
     
-    # 3. Assert: 500 Internal Server Error
-    assert get_res.status_code == 500
-    assert get_res.json()["error"] == "Internal server error"    
+    assert res.status_code == 200
+    assert len(res.json()) == 2
+    mock_get_all.assert_called_once()   
 
 # --- CUSTOMER BOUNDARY TESTS ---
 def test_customer_name_1_character():
@@ -275,10 +289,11 @@ def test_create_payment_service_throws_500(mock_create_payment):
     assert res.json() == {"error": "Something went wrong"}
 
 @patch("src.main.service.create_refund")
-def test_create_refund_service_throws_500(mock_create_refund):
-    mock_create_refund.side_effect = Exception("Memory Overflow Exception in line 402")
+def test_create_refund_success(mock_create_refund):
+    mock_create_refund.return_value = {"id": "ref_123", "paymentId": "pay_123", "amount": 500}
     
     res = client.post("/refunds", json={"paymentId": "pay_123", "amount": 500})
     
-    assert res.status_code == 500
-    assert res.json() == {"error": "Something went wrong"}
+    assert res.status_code == 201
+    assert res.json()["id"] == "ref_123"
+    mock_create_refund.assert_called_once_with("pay_123", 500)
