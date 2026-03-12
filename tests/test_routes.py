@@ -31,7 +31,7 @@ def test_create_payment_fails_for_invalid_customer():
     
     # Assuming your spec requires a 404 for a missing customer
     assert pay_response.status_code == 404 
-    assert pay_response.json()["detail"] == "Customer not found"
+    assert pay_response.json()["error"] == "Customer not found"
 
 def test_create_payment_fails_for_invalid_amount():
     # Re-create a user for this specific test
@@ -45,7 +45,7 @@ def test_create_payment_fails_for_invalid_amount():
     })
     
     assert pay_response.status_code == 400
-    assert pay_response.json()["detail"] == "Invalid amount"
+    assert pay_response.json()["error"] == "Invalid amount"
 
     # ... (previous tests remain above this) ...
 
@@ -70,7 +70,7 @@ def test_capture_payment_returns_404_when_id_is_unknown():
     capture_res = client.post("/payments/pay_unknown999/capture")
     
     assert capture_res.status_code == 404
-    assert capture_res.json()["detail"] == "Payment not found"
+    assert capture_res.json()["error"] == "Payment not found"
 
 def test_capture_payment_returns_409_when_cannot_be_captured():
     # 1. Setup: Create customer and payment
@@ -88,7 +88,7 @@ def test_capture_payment_returns_409_when_cannot_be_captured():
     
     # 4. Assert: 409 Conflict because it's no longer 'pending'
     assert capture_again_res.status_code == 409
-    assert capture_again_res.json()["detail"] == "Payment cannot be captured"
+    assert capture_again_res.json()["error"] == "Payment cannot be captured"
 
     # ... (previous tests remain above this) ...
 
@@ -113,13 +113,13 @@ def test_create_refund_returns_400_when_payment_id_is_missing():
     refund_res = client.post("/refunds", json={"amount": 1000})
     
     assert refund_res.status_code == 400
-    assert refund_res.json()["detail"] == "paymentId is missing"
+    assert refund_res.json()["error"] == "paymentId is missing"
 
 def test_create_refund_returns_400_when_amount_is_missing():
     refund_res = client.post("/refunds", json={"paymentId": "pay_some123"})
     
     assert refund_res.status_code == 400
-    assert refund_res.json()["detail"] == "amount is missing"
+    assert refund_res.json()["error"] == "amount is missing"
 
 def test_create_refund_returns_422_when_amount_exceeds_payment():
     # 1. Setup: Create customer and payment of 1500
@@ -133,7 +133,7 @@ def test_create_refund_returns_422_when_amount_exceeds_payment():
     
     # 3. Assert: 422 Unprocessable Entity
     assert refund_res.status_code == 422
-    assert refund_res.json()["detail"] == "Refund amount exceeds payment amount"
+    assert refund_res.json()["error"] == "Refund amount exceeds payment amount"
 
 def test_get_all_payments_returns_200_and_list():
     # 1. Setup: Create a customer and payment so the list isn't empty
@@ -160,4 +160,52 @@ def test_get_all_payments_returns_500_on_unexpected_error(mock_get_all):
     
     # 3. Assert: 500 Internal Server Error
     assert get_res.status_code == 500
-    assert get_res.json()["detail"] == "Internal server error"    
+    assert get_res.json()["error"] == "Internal server error"    
+
+# --- CUSTOMER BOUNDARY TESTS ---
+def test_customer_name_1_character():
+    res = client.post("/customers", json={"name": "A", "email": "a@example.com"})
+    assert res.status_code == 201
+
+def test_customer_name_100_characters():
+    long_name = "A" * 100
+    res = client.post("/customers", json={"name": long_name, "email": "a100@example.com"})
+    assert res.status_code == 201
+
+def test_customer_name_101_characters():
+    too_long_name = "A" * 101
+    res = client.post("/customers", json={"name": too_long_name, "email": "a101@example.com"})
+    assert res.status_code == 400
+
+# --- PAYMENT BOUNDARY TESTS ---
+def test_payment_amount_minimum_1():
+    cust_res = client.post("/customers", json={"name": "Bob", "email": "bob@example.com"})
+    res = client.post("/payments", json={"customer_id": cust_res.json()["id"], "amount": 1, "currency": "usd"})
+    assert res.status_code == 201
+
+def test_payment_amount_0():
+    res = client.post("/payments", json={"customer_id": "cus_123", "amount": 0, "currency": "usd"})
+    assert res.status_code == 400
+
+def test_payment_amount_negative_1():
+    res = client.post("/payments", json={"customer_id": "cus_123", "amount": -1, "currency": "usd"})
+    assert res.status_code == 400
+
+def test_payment_amount_decimal():
+    res = client.post("/payments", json={"customer_id": "cus_123", "amount": 9.99, "currency": "usd"})
+    assert res.status_code == 400 # Will trigger our new RequestValidationError handler
+
+# --- REFUND BOUNDARY TESTS ---
+def test_refund_exact_amount():
+    cust_res = client.post("/customers", json={"name": "Cam", "email": "cam@example.com"})
+    pay_res = client.post("/payments", json={"customer_id": cust_res.json()["id"], "amount": 500, "currency": "usd"})
+    
+    res = client.post("/refunds", json={"paymentId": pay_res.json()["id"], "amount": 500})
+    assert res.status_code == 201
+
+def test_refund_one_penny_over():
+    cust_res = client.post("/customers", json={"name": "Dan", "email": "dan@example.com"})
+    pay_res = client.post("/payments", json={"customer_id": cust_res.json()["id"], "amount": 500, "currency": "usd"})
+    
+    res = client.post("/refunds", json={"paymentId": pay_res.json()["id"], "amount": 501})
+    assert res.status_code == 422
