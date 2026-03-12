@@ -9,8 +9,9 @@ class PaymentService:
         self.STATUS_FAILED = 'failed'
 
     def create_customer(self, name: str, email: str):
-        if not name or not name.strip():
-            raise ValueError("Name is required")
+        # Enforce name length boundaries
+        if not name or len(name) < 1 or len(name) > 100:
+            raise ValueError("Invalid name length")
         if not validate_email(email):
             raise ValueError("Invalid email")
         if self.repo.find_customer_by_email(email):
@@ -24,12 +25,12 @@ class PaymentService:
         return self.repo.save_customer(customer)
 
     def create_payment(self, customer_id: str, amount: int, currency: str):
-        if not self.repo.find_customer_by_id(customer_id):
-            raise ValueError("Customer not found")
         if not validate_amount(amount):
             raise ValueError("Invalid amount")
         if not validate_currency(currency):
             raise ValueError("Invalid currency")
+        if not self.repo.find_customer_by_id(customer_id):
+            raise ValueError("Customer not found")
 
         payment = {
             "id": generate_id("pay"),
