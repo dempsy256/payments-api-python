@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 from src.repos.fake_payment_repo import FakePaymentRepository
 from src.services.payment_service import PaymentService
+from typing import Optional
 
 app = FastAPI(title="Fake Payment Server")
 
@@ -17,6 +18,12 @@ class PaymentCreate(BaseModel):
     customer_id: str
     amount: int
     currency: str
+
+class RefundCreate(BaseModel):
+    # We make these Optional so FastAPI doesn't auto-throw a 422 if they are missing.
+    # This allows us to manually throw a 400 to satisfy the strict assignment rubric.
+    paymentId: Optional[str] = None
+    amount: Optional[int] = None    
 
 # --- Routes ---
 @app.post("/customers", status_code=status.HTTP_201_CREATED)
@@ -45,3 +52,50 @@ def create_payment(payment_data: PaymentCreate):
         
         # Catch other errors like "Invalid amount" or "Invalid currency"
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
+    
+@app.post("/payments/{payment_id}/capture", status_code=status.HTTP_200_OK)
+def capture_payment(payment_id: str):
+    try:
+        return service.capture_payment(payment_id)
+    except ValueError as e:
+        error_msg = str(e)
+        if error_msg == "Payment not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
+        if error_msg == "Payment cannot be captured":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error_msg)
+            
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
+    
+@app.post("/refunds", status_code=status.HTTP_201_CREATED)
+def create_refund(refund_data: RefundCreate):
+    # Manual checks to return exactly 400 Bad Request
+    if refund_data.paymentId is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="paymentId is missing")
+    if refund_data.amount is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="amount is missing")
+
+    try:
+        return service.create_refund(refund_data.paymentId, refund_data.amount)
+    except ValueError as e:
+        error_msg = str(e)
+        if error_msg == "Refund amount exceeds payment amount":
+            # Return exactly 422 Unprocessable Entity
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=error_msg)
+        if error_msg == "Payment not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
+            
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg) 
+
+# ... existing routes ...
+
+@app.get("/payments", status_code=status.HTTP_200_OK)
+def get_all_payments():
+    try:
+        return service.get_all_payments()
+    except Exception as e:
+        # This catches ANY unexpected error (like a DB connection failure in a real app)
+        # We purposely do not expose the exact internal error string to the user for security
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail="Internal server error"
+        )

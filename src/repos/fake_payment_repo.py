@@ -20,6 +20,17 @@ class FakePaymentRepository:
     def save_payment(self, payment: dict):
         self.payments[payment['id']] = payment
         return payment
+    
+    def find_payment_by_id(self, payment_id: str):
+        return self.payments.get(payment_id)
+    
+    def save_refund(self, refund: dict):
+        self.refunds[refund['id']] = refund
+        return refund
+    
+    def get_all_payments(self):
+        # .values() gets the payment dictionaries, list() converts them into an array
+        return list(self.payments.values())
 
     def clear(self):
         self.customers.clear()

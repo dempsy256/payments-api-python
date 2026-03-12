@@ -39,3 +39,36 @@ class PaymentService:
             "status": self.STATUS_PENDING
         }
         return self.repo.save_payment(payment)
+    
+    def capture_payment(self, payment_id: str):
+        payment = self.repo.find_payment_by_id(payment_id)
+        if not payment:
+            raise ValueError("Payment not found")
+        
+        if payment["status"] != self.STATUS_PENDING:
+            raise ValueError("Payment cannot be captured")
+            
+        # Update status and save it back to our fake database
+        payment["status"] = self.STATUS_SUCCEEDED
+        self.repo.save_payment(payment)
+        
+        return payment
+    
+    def create_refund(self, payment_id: str, amount: int):
+        payment = self.repo.find_payment_by_id(payment_id)
+        if not payment:
+            raise ValueError("Payment not found")
+        
+        # Validate that we don't refund more than the original payment
+        if amount > payment["amount"]:
+            raise ValueError("Refund amount exceeds payment amount")
+            
+        refund = {
+            "id": generate_id("ref"),
+            "paymentId": payment_id,
+            "amount": amount
+        }
+        return self.repo.save_refund(refund)
+    
+    def get_all_payments(self):
+        return self.repo.get_all_payments()
