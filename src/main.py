@@ -21,6 +21,19 @@ async def http_exception_handler(request, exc):
 repo = FakePaymentRepository()
 service = PaymentService(repo)
 
+# ... existing exception handlers for RequestValidationError and HTTPException ...
+
+# Global catch-all for unexpected 500 errors (Security requirement)
+@app.exception_handler(Exception)
+async def global_500_exception_handler(request, exc):
+    # In a real production app, you would print/log the actual `exc` here for debugging!
+    # print(f"CRITICAL ERROR LOGGED SERVER-SIDE: {exc}")
+    
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"error": "Something went wrong"}
+    )
+
 # --- Pydantic Models ---
 class CustomerCreate(BaseModel):
     name: str
@@ -52,8 +65,8 @@ def create_customer(customer_data: CustomerCreate):
 def create_payment(payment_data: PaymentCreate):
     try:
         return service.create_payment(
-            payment_data.customer_id, 
-            payment_data.amount, 
+            payment_data.customer_id,
+            payment_data.amount,
             payment_data.currency
         )
     except ValueError as e:
@@ -61,9 +74,11 @@ def create_payment(payment_data: PaymentCreate):
         # Match the specific error strings from your payment_service.py
         if error_msg == "Customer not found":
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
-        
+
         # Catch other errors like "Invalid amount" or "Invalid currency"
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Something went wrong")
     
 @app.post("/payments/{payment_id}/capture", status_code=status.HTTP_200_OK)
 def capture_payment(payment_id: str):
@@ -95,8 +110,10 @@ def create_refund(refund_data: RefundCreate):
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=error_msg)
         if error_msg == "Payment not found":
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
-            
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg) 
+
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Something went wrong") 
 
 # ... existing routes ...
 
@@ -104,13 +121,8 @@ def create_refund(refund_data: RefundCreate):
 def get_all_payments():
     try:
         return service.get_all_payments()
-    except Exception as e:
-        # This catches ANY unexpected error (like a DB connection failure in a real app)
-        # We purposely do not expose the exact internal error string to the user for security
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail="Internal server error"
-        )
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
     
 @app.get("/customers/{customer_id}", status_code=status.HTTP_200_OK)
 def get_customer(customer_id: str):
