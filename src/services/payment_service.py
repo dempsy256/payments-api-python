@@ -73,3 +73,39 @@ class PaymentService:
     
     def get_all_payments(self):
         return self.repo.get_all_payments()
+    
+    def get_customer(self, customer_id: str):
+        customer = self.repo.find_customer_by_id(customer_id)
+        if not customer:
+            raise ValueError("Customer not found")
+        return customer
+
+    def get_customer_payments(self, customer_id: str):
+        # Must verify the customer exists first, otherwise it's a 404!
+        if not self.repo.find_customer_by_id(customer_id):
+            raise ValueError("Customer not found")
+        return self.repo.find_payments_by_customer_id(customer_id)
+
+    def get_payment(self, payment_id: str):
+        payment = self.repo.find_payment_by_id(payment_id)
+        if not payment:
+            raise ValueError("Payment not found")
+        return payment
+
+    def fail_payment(self, payment_id: str):
+        payment = self.repo.find_payment_by_id(payment_id)
+        if not payment:
+            raise ValueError("Payment not found")
+        
+        if payment["status"] != self.STATUS_PENDING:
+            raise ValueError("Payment cannot be failed")
+            
+        payment["status"] = self.STATUS_FAILED
+        self.repo.save_payment(payment)
+        return payment
+
+    def get_refund(self, refund_id: str):
+        refund = self.repo.find_refund_by_id(refund_id)
+        if not refund:
+            raise ValueError("Refund not found")
+        return refund

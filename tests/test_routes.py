@@ -209,3 +209,30 @@ def test_refund_one_penny_over():
     
     res = client.post("/refunds", json={"paymentId": pay_res.json()["id"], "amount": 501})
     assert res.status_code == 422
+
+# --- 404 NOT FOUND TESTS ---
+
+def test_get_customer_not_found():
+    res = client.get("/customers/cus_unknown999")
+    assert res.status_code == 404
+    assert res.json() == {"error": "Customer not found"}
+
+def test_get_customer_payments_not_found():
+    res = client.get("/customers/cus_unknown999/payments")
+    assert res.status_code == 404
+    assert res.json() == {"error": "Customer not found"}
+
+def test_get_payment_not_found():
+    res = client.get("/payments/pay_unknown999")
+    assert res.status_code == 404
+    assert res.json() == {"error": "Payment not found"}
+
+def test_fail_payment_not_found():
+    res = client.post("/payments/pay_unknown999/fail")
+    assert res.status_code == 404
+    assert res.json() == {"error": "Payment not found"}
+
+def test_get_refund_not_found():
+    res = client.get("/refunds/ref_unknown999")
+    assert res.status_code == 404
+    assert res.json() == {"error": "Refund not found"}

@@ -31,6 +31,13 @@ class FakePaymentRepository:
     def get_all_payments(self):
         # .values() gets the payment dictionaries, list() converts them into an array
         return list(self.payments.values())
+    
+    def find_payments_by_customer_id(self, customer_id: str):
+        # List comprehension to filter payments by customer_id
+        return [p for p in self.payments.values() if p.get("customer_id") == customer_id]
+
+    def find_refund_by_id(self, refund_id: str):
+        return self.refunds.get(refund_id)
 
     def clear(self):
         self.customers.clear()

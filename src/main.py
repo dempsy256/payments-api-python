@@ -111,3 +111,41 @@ def get_all_payments():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail="Internal server error"
         )
+    
+@app.get("/customers/{customer_id}", status_code=status.HTTP_200_OK)
+def get_customer(customer_id: str):
+    try:
+        return service.get_customer(customer_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+@app.get("/customers/{customer_id}/payments", status_code=status.HTTP_200_OK)
+def get_customer_payments(customer_id: str):
+    try:
+        return service.get_customer_payments(customer_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+@app.get("/payments/{payment_id}", status_code=status.HTTP_200_OK)
+def get_payment(payment_id: str):
+    try:
+        return service.get_payment(payment_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+@app.post("/payments/{payment_id}/fail", status_code=status.HTTP_200_OK)
+def fail_payment(payment_id: str):
+    try:
+        return service.fail_payment(payment_id)
+    except ValueError as e:
+        error_msg = str(e)
+        if error_msg == "Payment not found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error_msg)
+
+@app.get("/refunds/{refund_id}", status_code=status.HTTP_200_OK)
+def get_refund(refund_id: str):
+    try:
+        return service.get_refund(refund_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
