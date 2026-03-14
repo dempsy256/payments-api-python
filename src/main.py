@@ -21,7 +21,6 @@ async def http_exception_handler(request, exc):
 repo = FakePaymentRepository()
 service = PaymentService(repo)
 
-# ... existing exception handlers for RequestValidationError and HTTPException ...
 
 # Global catch-all for unexpected 500 errors (Security requirement)
 @app.exception_handler(Exception)
